@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, X, Key, Save } from 'lucide-react';
+import { Settings, X, Key, Save, Info } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -75,9 +75,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, a
                     <Key className="h-5 w-5" />
                   </div>
                 </div>
-                <p className="text-[10px] text-gray-400 leading-relaxed">
-                  Your API key is stored locally in your browser and never shared with our servers.
-                  If left blank, the system will attempt to use the environment's default key.
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 flex gap-3">
+                  <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-blue-900 uppercase">Pro Tip: Automatic Key</p>
+                    <p className="text-[10px] text-blue-700 leading-relaxed">
+                      In AI Studio, you don't actually need to paste a key here! We'll automatically use the key from your **User Secrets** if this field is left blank. 
+                      This allows other users to remix your project and use their own keys securely.
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-gray-400 leading-relaxed italic">
+                  Note: Custom keys provided here are stored locally in your browser and never shared with our servers.
                 </p>
               </div>
             </div>

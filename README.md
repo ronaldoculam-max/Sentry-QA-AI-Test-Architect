@@ -35,6 +35,15 @@ npm run dev
 
 The application will be available at `http://localhost:3000`.
 
+## AI Studio Integration & Remixing
+
+This project is optimized for the **Google AI Studio** environment:
+
+- **Automatic Key Fallback**: The app first checks if you've provided a custom API key in the settings menu. If not, it automatically falls back to `process.env.GEMINI_API_KEY`.
+- **User Secrets & Remixing**: When another user remixes (clones) this project in AI Studio, they don't need to configure anything. AI Studio securely injects their own `GEMINI_API_KEY` from their workspace secrets into the app's environment. This ensures that:
+  - Your secrets are never shared.
+  - Remixers have a "plug-and-play" experience using their own quota.
+
 ## Key Features
 
 - **AI Requirement Analysis**: Generates test cases, edge cases, and automated test strategies.

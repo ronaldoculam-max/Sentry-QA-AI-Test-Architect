@@ -106,9 +106,7 @@ export async function analyzeRequirements(requirements: string, attachments: Att
       throw new Error("Gemini API Key is missing. Please provide one in Settings (gear icon).");
     }
 
-    const MODEL_NAME = "gemini-2.0-flash"; // Use stable flash model by default
-
-    const genAI = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey });
     const parts: any[] = [{ text: requirements }];
 
     if (attachments.length > 0) {
@@ -121,22 +119,20 @@ export async function analyzeRequirements(requirements: string, attachments: Att
       parts.push(...attachmentParts);
     }
 
-    const response = await genAI.models.generateContent({
-      model: MODEL_NAME,
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts }],
       config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction: SYSTEM_INSTRUCTION + "\n\nCRITICAL: Be concise but thorough. Focus on quality over quantity to ensure the JSON response is complete and not truncated.",
         responseMimeType: "application/json",
+        temperature: 0.2,
       }
     });
 
-    if (!response.text) {
-      throw new Error("No response content from Gemini AI");
-    }
-
-    const text = response.text.trim();
+    const text = response.text?.trim() || "";
+    
     if (!text) {
-      throw new Error("Empty response from Gemini AI");
+      throw new Error("Empty response from Gemini AI. The requirements might be too large or complex.");
     }
 
     try {
