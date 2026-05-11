@@ -99,10 +99,13 @@ Return the result strictly in the following JSON format:
 
 export async function analyzeRequirements(requirements: string, attachments: Attachment[] = [], customApiKey?: string): Promise<QAResult> {
   try {
-    const apiKey = customApiKey || process.env.GEMINI_API_KEY || '';
+    const trimmedCustomKey = customApiKey?.trim();
+    const apiKey = trimmedCustomKey || process.env.GEMINI_API_KEY || '';
+    
     if (!apiKey) {
       throw new Error("Gemini API Key is missing. Please provide one in Settings (gear icon).");
     }
+
     const genAI = new GoogleGenAI({ apiKey });
     const parts: any[] = [{ text: requirements }];
 
@@ -117,7 +120,7 @@ export async function analyzeRequirements(requirements: string, attachments: Att
     }
 
     const response = await genAI.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts }],
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
@@ -146,8 +149,14 @@ export async function analyzeRequirements(requirements: string, attachments: Att
       console.error("JSON Parse Error. Raw text:", text);
       throw new Error("Failed to parse analysis result. The output may have been truncated.");
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error analyzing requirements:", error);
+    
+    // Specifically handle API key errors to guide the user
+    if (error?.message?.includes('API_KEY_INVALID') || error?.message?.includes('API key not valid')) {
+      throw new Error("The Gemini API Key provided is invalid. Please check your key in Settings.");
+    }
+    
     throw error;
   }
 }
