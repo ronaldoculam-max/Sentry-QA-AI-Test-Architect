@@ -1,7 +1,11 @@
 import React from 'react';
 import { Shield, Settings, HelpCircle, Activity } from 'lucide-react';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onOpenSettings: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/80 backdrop-blur-md" id="app-header">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -25,7 +29,10 @@ export const Header: React.FC = () => {
           <button className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors">
             <Activity className="h-5 w-5" />
           </button>
-          <button className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <button 
+            onClick={onOpenSettings}
+            className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
             <Settings className="h-5 w-5" />
           </button>
         </div>

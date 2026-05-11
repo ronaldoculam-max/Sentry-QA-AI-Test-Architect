@@ -1,10 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { QAResult, Attachment } from "../types";
 
-const ai = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY || ''
-});
-
 const SYSTEM_INSTRUCTION = `
 Role: Senior Strategic QA Architect & Agile Lead.
 Goal: Decompose complex requirements into a bulletproof validation strategy.
@@ -101,8 +97,13 @@ Return the result strictly in the following JSON format:
 }
 `;
 
-export async function analyzeRequirements(requirements: string, attachments: Attachment[] = []): Promise<QAResult> {
+export async function analyzeRequirements(requirements: string, attachments: Attachment[] = [], customApiKey?: string): Promise<QAResult> {
   try {
+    const apiKey = customApiKey || process.env.GEMINI_API_KEY || '';
+    if (!apiKey) {
+      throw new Error("Gemini API Key is missing. Please provide one in Settings (gear icon).");
+    }
+    const genAI = new GoogleGenAI({ apiKey });
     const parts: any[] = [{ text: requirements }];
 
     if (attachments.length > 0) {
@@ -115,7 +116,7 @@ export async function analyzeRequirements(requirements: string, attachments: Att
       parts.push(...attachmentParts);
     }
 
-    const response = await ai.models.generateContent({
+    const response = await genAI.models.generateContent({
       model: "gemini-2.0-flash",
       contents: [{ role: "user", parts }],
       config: {

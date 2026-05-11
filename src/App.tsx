@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, 
@@ -25,7 +25,10 @@ import {
   FileCode,
   FileType,
   ChevronDown,
-  PlayCircle
+  PlayCircle,
+  Settings,
+  Key,
+  Save
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { jsPDF } from 'jspdf';
@@ -44,6 +47,21 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    const savedKey = localStorage.getItem('sentryqa_gemini_api_key');
+    if (savedKey) {
+      setGeminiApiKey(savedKey);
+    }
+  }, []);
+
+  const saveApiKey = (key: string) => {
+    localStorage.setItem('sentryqa_gemini_api_key', key);
+    setGeminiApiKey(key);
+    setIsSettingsOpen(false);
+  };
 
   const SUPPORTED_MIME_TYPES = [
     'application/pdf',
@@ -465,7 +483,7 @@ export default function App() {
     setIsAnalyzing(true);
     setError(null);
     try {
-      const data = await analyzeRequirements(requirements, attachments);
+      const data = await analyzeRequirements(requirements, attachments, geminiApiKey);
       setResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during analysis');
@@ -476,7 +494,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header />
+      <Header onOpenSettings={() => setIsSettingsOpen(true)} />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -1116,6 +1134,97 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {isSettingsOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSettingsOpen(false)}
+              className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[32px] border border-gray-200 shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Settings className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Settings</h3>
+                    <p className="text-xs text-gray-500">Configure your workspace</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="api-key" className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                      <Key className="h-3 w-3" />
+                      Gemini API Key
+                    </label>
+                    <a 
+                      href="https://aistudio.google.com/app/apikey" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-bold text-blue-600 hover:underline uppercase tracking-wide"
+                    >
+                      Get Key
+                    </a>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      id="api-key"
+                      type="password"
+                      placeholder="Paste your API key here..."
+                      className="w-full h-12 pl-4 pr-12 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
+                      value={geminiApiKey}
+                      onChange={(e) => setGeminiApiKey(e.target.value)}
+                    />
+                    <div className="absolute right-3 top-3 text-gray-300">
+                      <Key className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-400 leading-relaxed">
+                    Your API key is stored locally in your browser and never shared with our servers.
+                    If left blank, the system will attempt to use the environment's default key.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
+                <button 
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="flex-1 h-11 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => saveApiKey(geminiApiKey)}
+                  className="flex-[2] h-11 rounded-xl bg-blue-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-700 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
+                >
+                  <Save className="h-4 w-4" />
+                  Save Changes
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
