@@ -106,6 +106,8 @@ export async function analyzeRequirements(requirements: string, attachments: Att
       throw new Error("Gemini API Key is missing. Please provide one in Settings (gear icon).");
     }
 
+    const MODEL_NAME = "gemini-2.0-flash"; // Use stable flash model by default
+
     const genAI = new GoogleGenAI({ apiKey });
     const parts: any[] = [{ text: requirements }];
 
@@ -120,7 +122,7 @@ export async function analyzeRequirements(requirements: string, attachments: Att
     }
 
     const response = await genAI.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: MODEL_NAME,
       contents: [{ role: "user", parts }],
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,

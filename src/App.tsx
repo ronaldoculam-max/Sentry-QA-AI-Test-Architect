@@ -3,18 +3,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, 
   Loader2, 
-  CheckCircle2, 
-  AlertTriangle, 
   FileText, 
-  Shield,
   ShieldAlert, 
-  LayoutDashboard, 
-  ArrowRight,
-  Code,
   Eye,
   GitBranch,
-  BarChart3,
-  Accessibility,
   Paperclip,
   X,
   UploadCloud,
@@ -26,19 +18,24 @@ import {
   FileType,
   ChevronDown,
   PlayCircle,
-  Settings,
-  Key,
-  Save
+  Info,
+  AlertTriangle,
+  Accessibility,
+  LayoutDashboard,
+  ArrowRight,
+  BarChart3,
+  Shield
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, BorderStyle, HeadingLevel, WidthType } from 'docx';
 import { Header } from './components/Header';
+import { ResultHeader } from './components/ResultHeader';
+import { StrategicAnalysisSection } from './components/StrategicAnalysisSection';
+import { AdversarialDesignSection } from './components/AdversarialDesignSection';
+import { SettingsModal } from './components/SettingsModal';
 import { analyzeRequirements } from './services/qaService';
 import { QAResult, Attachment } from './types';
 import Mermaid from './components/Mermaid';
 import { cn } from './lib/utils';
+import * as ExportService from './services/exportService';
 
 export default function App() {
   const [requirements, setRequirements] = useState('');
@@ -138,343 +135,6 @@ export default function App() {
 
   const removeAttachment = (index: number) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const downloadFullReport = () => {
-    if (!result) return;
-    const dataStr = JSON.stringify(result, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sentryqa_report_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportCSV = () => {
-    if (!result) return;
-    const csv = [
-      ['TC ID', 'Feature', 'Scenario Group', 'Category', 'Scenario', 'Pre-conditions', 'Steps', 'Gherkin', 'Expected Result', 'AC Reference'],
-      ...result.testCases.map(tc => [
-        `"${tc.id || ''}"`, 
-        `"${tc.feature || 'General'}"`, 
-        `"${tc.scenarioGroup || 'Default Flow'}"`, 
-        `"${tc.category || 'Functional'}"`, 
-        `"${tc.scenario || ''}"`, 
-        `"${tc.preconditions || ''}"`, 
-        `"${tc.steps || ''}"`, 
-        `"${tc.gherkin || ''}"`, 
-        `"${tc.expectedResult || ''}"`, 
-        `"${tc.acReference || ''}"`
-      ])
-    ].map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sentryqa_test_cases_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportPlaywright = () => {
-    if (!result) return;
-    
-    let script = `import { test, expect } from '@playwright/test';\n\n`;
-    script += `/**\n * SentryQA Automated Playwright Script\n`;
-    script += ` * Generated on: ${new Date().toLocaleString()}\n */\n\n`;
-
-    const grouped = groupTestCases(result.testCases);
-
-    Object.entries(grouped).forEach(([feature, scenarios]) => {
-      script += `test.describe('${feature}', () => {\n\n`;
-      
-      Object.entries(scenarios).forEach(([scenarioName, tcs]) => {
-        tcs.forEach(tc => {
-          script += `  /**\n   * ${tc.id}: ${tc.scenario}\n`;
-          if (tc.gherkin) script += `   * Gherkin: ${tc.gherkin.replace(/\n/g, '\n   * ')}\n`;
-          script += `   * Expected: ${tc.expectedResult}\n   */\n`;
-          script += `  test('${tc.id} - ${tc.scenario.replace(/'/g, "\\'")}', async ({ page }) => {\n`;
-          script += `    // Pre-condition: ${tc.preconditions || 'N/A'}\n`;
-          
-          const steps = tc.steps.split('\n').filter(s => s.trim());
-          steps.forEach(step => {
-            script += `    // Step: ${step.trim()}\n`;
-          });
-          
-          script += `    // Expect: ${tc.expectedResult}\n`;
-          script += `    // await expect(page.locator('body')).toBeVisible(); // Placeholder validation\n`;
-          script += `  });\n\n`;
-        });
-      });
-
-      script += `});\n\n`;
-    });
-
-    const blob = new Blob([script], { type: 'text/typescript' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sentryqa_playwright_${new Date().toISOString().split('T')[0]}.spec.ts`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const groupTestCases = (testCases: QAResult['testCases']) => {
-    if (!testCases || !Array.isArray(testCases)) return {};
-    return testCases.reduce((acc, tc) => {
-      const feature = tc.feature || 'General';
-      const scenario = tc.scenarioGroup || 'Default Flow';
-      
-      if (!acc[feature]) acc[feature] = {};
-      if (!acc[feature][scenario]) acc[feature][scenario] = [];
-      
-      acc[feature][scenario].push(tc);
-      return acc;
-    }, {} as Record<string, Record<string, typeof testCases>>);
-  };
-
-  const exportMarkdown = () => {
-    if (!result) return;
-    let md = `# SentryQA Validation Strategy Report\n\n`;
-    md += `**Generated on:** ${new Date().toLocaleString()}\n\n`;
-    
-    md += `## Phase 1: Strategic Analysis\n\n`;
-    md += `### Agile Test Plan\n`;
-    md += `- **Scope In:** ${result.analysis.testPlan?.scope?.in?.join(', ') || 'N/A'}\n`;
-    md += `- **Scope Out:** ${result.analysis.testPlan?.scope?.out?.join(', ') || 'N/A'}\n`;
-    md += `- **Definition of Done:** ${result.analysis.testPlan?.definitionOfDone || 'N/A'}\n\n`;
-    
-    md += `### Technical Risks\n`;
-    result.analysis.testPlan?.risks?.forEach(risk => {
-      md += `- **${risk.title}:** ${risk.description}\n`;
-    });
-    md += `\n`;
-    
-    md += `### Validation Strategy\n`;
-    Object.entries(result.analysis.strategy || {}).forEach(([key, val]) => {
-      md += `- **${key.toUpperCase()}:** ${val}\n`;
-    });
-    md += `\n`;
-    
-    md += `## Phase 2: Adversarial Design\n\n`;
-    md += `### The Dirty Dozen\n`;
-    result.adversarial?.dirtyDozen?.forEach(item => {
-      md += `#### ${item.type}\n`;
-      item.cases?.forEach(c => md += `- ${c}\n`);
-      md += `\n`;
-    });
-    
-    md += `## Phase 3: Formal Documentation\n\n`;
-    const grouped = groupTestCases(result.testCases);
-    Object.entries(grouped).forEach(([feature, scenarios]) => {
-      md += `### Feature: ${feature}\n\n`;
-      Object.entries(scenarios).forEach(([scenario, tcs]) => {
-        md += `#### Scenario: ${scenario}\n\n`;
-        tcs.forEach(tc => {
-          md += `**Test Case ${tc.id}: ${tc.scenario}**\n`;
-          md += `- **Category:** ${tc.category}\n`;
-          md += `- **Pre-conditions:** ${tc.preconditions || 'None'}\n`;
-          if (tc.gherkin) md += `- **Gherkin:**\n  \`\`\`gherkin\n  ${tc.gherkin.replace(/\n/g, '\n  ')}\n  \`\`\`\n`;
-          md += `- **Steps:**\n  ${tc.steps.replace(/\n/g, '\n  ')}\n`;
-          md += `- **Expected Result:** ${tc.expectedResult}\n`;
-          md += `- **AC Reference:** ${tc.acReference}\n\n`;
-        });
-      });
-    });
-    
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sentryqa_report_${new Date().toISOString().split('T')[0]}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportPDF = () => {
-    if (!result) return;
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Title
-    doc.setFontSize(20);
-    doc.text("SentryQA Validation Strategy", 14, 22);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
-    
-    // Phase 1
-    doc.setFontSize(16);
-    doc.setTextColor(0);
-    doc.text("Phase 1: Strategic Analysis", 14, 45);
-    
-    doc.setFontSize(12);
-    doc.text("Agile Test Plan", 14, 55);
-    doc.setFontSize(10);
-    doc.text(`Scope In: ${result.analysis.testPlan?.scope?.in?.join(', ') || 'N/A'}`, 14, 62, { maxWidth: pageWidth - 28 });
-    doc.text(`Scope Out: ${result.analysis.testPlan?.scope?.out?.join(', ') || 'N/A'}`, 14, 70, { maxWidth: pageWidth - 28 });
-    
-    // Technical Risks
-    doc.setFontSize(12);
-    doc.text("Technical Risks", 14, 85);
-    const riskData = (result.analysis.testPlan?.risks || []).map(r => [r.title, r.description]);
-    autoTable(doc, {
-      startY: 90,
-      head: [['Risk', 'Description']],
-      body: riskData,
-      theme: 'striped',
-      headStyles: { fillColor: [79, 70, 229] }
-    });
-
-    // Phase 3 - Test Cases (on new page)
-    doc.addPage();
-    doc.setFontSize(16);
-    doc.text("Phase 3: Formal Documentation", 14, 22);
-    
-    let currentY = 32;
-    const grouped = groupTestCases(result.testCases);
-    Object.entries(grouped).forEach(([feature, scenarios]) => {
-      doc.setFontSize(14);
-      doc.setTextColor(50, 50, 50);
-      doc.text(`Feature: ${feature}`, 14, currentY);
-      currentY += 10;
-
-      Object.entries(scenarios).forEach(([scenario, tcs]) => {
-        doc.setFontSize(11);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Scenario: ${scenario}`, 14, currentY);
-        currentY += 5;
-
-        const tcRows = tcs.map(tc => [
-          tc.id,
-          tc.category,
-          tc.scenario,
-          tc.gherkin || tc.expectedResult
-        ]);
-
-        autoTable(doc, {
-          startY: currentY,
-          head: [['ID', 'Category', 'Scenario', 'Gherkin / Result']],
-          body: tcRows,
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-          didDrawPage: (data) => {
-            currentY = data.cursor?.y || 0;
-          }
-        });
-        currentY += 15;
-        
-        if (currentY > 250) {
-          doc.addPage();
-          currentY = 22;
-        }
-      });
-    });
-
-    doc.save(`sentryqa_report_${new Date().toISOString().split('T')[0]}.pdf`);
-  };
-
-  const exportDOCX = async () => {
-    if (!result) return;
-    
-    const sections = [];
-
-    // Title Section
-    sections.push({
-      properties: {},
-      children: [
-        new Paragraph({
-          text: "SentryQA Validation Strategy Report",
-          heading: HeadingLevel.TITLE,
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `Generated on: ${new Date().toLocaleString()}`,
-              italics: true,
-            }),
-          ],
-        }),
-        new Paragraph({ text: "" }),
-        new Paragraph({
-          text: "Phase 1: Strategic Analysis",
-          heading: HeadingLevel.HEADING_1,
-        }),
-        new Paragraph({
-          text: "Agile Test Plan",
-          heading: HeadingLevel.HEADING_2,
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({ text: "Scope In: ", bold: true }),
-            new TextRun(result.analysis.testPlan?.scope?.in?.join(', ') || 'N/A'),
-          ],
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({ text: "Scope Out: ", bold: true }),
-            new TextRun(result.analysis.testPlan?.scope?.out?.join(', ') || 'N/A'),
-          ],
-        }),
-        new Paragraph({ text: "" }),
-        new Paragraph({
-          text: "Phase 3: Formal Documentation",
-          heading: HeadingLevel.HEADING_1,
-        }),
-      ],
-    });
-
-    // Test Cases Table
-    const tableRows = [
-      new TableRow({
-        children: [
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "ID", bold: true, font: "Courier New" })] })] }),
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Feature", bold: true })] })] }),
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Category", bold: true })] })] }),
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Scenario", bold: true })] })] }),
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Expected Result", bold: true })] })] }),
-        ],
-      }),
-    ];
-
-    result.testCases.forEach(tc => {
-      tableRows.push(
-        new TableRow({
-          children: [
-            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: tc.id, font: "Courier New" })] })] }),
-            new TableCell({ children: [new Paragraph({ text: tc.feature || 'General' })] }),
-            new TableCell({ children: [new Paragraph({ text: tc.category })] }),
-            new TableCell({ children: [new Paragraph({ text: tc.scenario })] }),
-            new TableCell({ children: [new Paragraph({ text: tc.expectedResult })] }),
-          ],
-        })
-      );
-    });
-
-    const doc = new Document({
-      sections: [
-        {
-          children: [
-            ...sections[0].children,
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              rows: tableRows,
-            }),
-          ],
-        },
-      ],
-    });
-
-    const blob = await Packer.toBlob(doc);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sentryqa_report_${new Date().toISOString().split('T')[0]}.docx`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const handleAnalyze = async () => {
@@ -604,6 +264,13 @@ export default function App() {
                   </>
                 )}
               </button>
+
+              <div className="mt-4 flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-100">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                <p className="text-[10px] text-blue-700 leading-relaxed">
+                  <strong>Note:</strong> A default API key is configured in the environment. Adding a custom key in settings (gear icon) is optional.
+                </p>
+              </div>
             </div>
 
             {error && (
@@ -666,138 +333,10 @@ export default function App() {
                   className="space-y-8 pb-12"
                 >
                   {/* Result Header */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-600/20">
-                        <BarChart3 className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Validation Strategy</h2>
-                        <p className="text-sm text-gray-500">Decomposed into 3 strategic phases</p>
-                      </div>
-                    </div>
-                    
-                    <div className="relative group">
-                      <button 
-                        className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all shadow-sm font-bold text-sm"
-                      >
-                        <Download className="h-5 w-5 text-blue-600" />
-                        Export Report
-                        <ChevronDown className="h-4 w-4 text-gray-400 group-hover:rotate-180 transition-transform" />
-                      </button>
-                      
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl border border-gray-200 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 overflow-hidden">
-                        <div className="p-2 space-y-1">
-                          <button 
-                            onClick={downloadFullReport}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-sm font-medium text-gray-700 transition-colors"
-                          >
-                            <FileJson className="h-4 w-4 text-amber-500" />
-                            Full Data (JSON)
-                          </button>
-                          <button 
-                            onClick={exportPDF}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-sm font-medium text-gray-700 transition-colors"
-                          >
-                            <FileType className="h-4 w-4 text-red-500" />
-                            Strategy (PDF)
-                          </button>
-                          <button 
-                            onClick={exportDOCX}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-sm font-medium text-gray-700 transition-colors"
-                          >
-                            <FileText className="h-4 w-4 text-blue-500" />
-                            Formal Doc (DOCX)
-                          </button>
-                          <button 
-                            onClick={exportMarkdown}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-sm font-medium text-gray-700 transition-colors"
-                          >
-                            <FileCode className="h-4 w-4 text-indigo-500" />
-                            Markdown (MD)
-                          </button>
-                          <button 
-                            onClick={exportPlaywright}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-sm font-medium text-gray-700 transition-colors"
-                          >
-                            <PlayCircle className="h-4 w-4 text-purple-500" />
-                            Playwright (.ts)
-                          </button>
-                          <div className="h-px bg-gray-100 my-1 mx-2" />
-                          <button 
-                            onClick={exportCSV}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-sm font-medium text-gray-700 transition-colors"
-                          >
-                            <Send className="h-4 w-4 text-green-500" />
-                            Test Cases (CSV)
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <ResultHeader result={result} />
 
                   {/* Phase 1: Strategic Analysis */}
-                  <section id="analysis" className="space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle2 className="h-6 w-6 text-green-500" />
-                      <h2 className="text-2xl font-bold">Phase 1: Strategic Analysis</h2>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-                        <h3 className="text-sm font-bold text-blue-600 uppercase mb-4">Agile Test Plan</h3>
-                        <div className="space-y-4">
-                          <div>
-                            <p className="text-xs font-bold text-gray-400 mb-1 tracking-wide">SCOPE IN</p>
-                            <div className="flex flex-wrap gap-2">
-                              {result.analysis.testPlan?.scope?.in?.map((item, i) => (
-                                <span key={i} className="px-2 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded uppercase border border-green-100">{item}</span>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-gray-400 mb-1 tracking-wide">SCOPE OUT</p>
-                            <div className="flex flex-wrap gap-2">
-                              {result.analysis.testPlan?.scope?.out?.map((item, i) => (
-                                <span key={i} className="px-2 py-1 bg-gray-100 text-gray-600 text-[10px] font-bold rounded uppercase border border-gray-200">{item}</span>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-gray-400 mb-1 tracking-wide uppercase">Definition of Done</p>
-                            <p className="text-sm text-gray-600 leading-relaxed italic border-l-2 border-blue-500 pl-3">{result.analysis.testPlan?.definitionOfDone || 'Not specified'}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-                        <h3 className="text-sm font-bold text-orange-600 uppercase mb-4">Technical Risks</h3>
-                        <div className="space-y-4">
-                          {result.analysis.testPlan?.risks?.map((risk, i) => (
-                            <div key={i} className="flex gap-3">
-                              <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0" />
-                              <div>
-                                <p className="text-sm font-bold text-gray-900">{risk.title || 'Risk'}</p>
-                                <p className="text-xs text-gray-500">{risk.description || 'No details'}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-                      <h3 className="text-sm font-bold text-purple-600 uppercase mb-4">Validation Strategy</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {Object.entries(result.analysis.strategy || {}).map(([key, val]) => (
-                          <div key={key}>
-                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 tracking-wide">{key}</h4>
-                            <p className="text-sm text-gray-600">{val || 'Strategy not defined'}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </section>
+                  <StrategicAnalysisSection analysis={result.analysis} />
 
                   {/* Flowchart */}
                   {result.mermaidFlowchart && (
@@ -811,62 +350,7 @@ export default function App() {
                   )}
 
                   {/* Phase 2: Adversarial Design */}
-                  <section id="adversarial" className="space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <ShieldAlert className="h-6 w-6 text-red-600" />
-                      <h2 className="text-2xl font-bold">Phase 2: Adversarial Design</h2>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-6">
-                      <div className="bg-gray-900 text-white p-6 rounded-3xl overflow-hidden relative group">
-                        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
-                          <ShieldAlert className="h-24 w-24" />
-                        </div>
-                        <h3 className="text-sm font-bold text-red-400 uppercase mb-6 tracking-widest relative z-10">The Dirty Dozen: Payload-First TDD</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 relative z-10">
-                          {result.adversarial?.dirtyDozen?.map((item, i) => (
-                            <div key={i} className="space-y-2">
-                              <p className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                                <span className="h-1 w-4 bg-red-500 rounded-full" />
-                                {item.type || 'Test Category'}
-                              </p>
-                              <ul className="space-y-1">
-                                {item.cases?.map((c, j) => (
-                                  <li key={j} className="text-xs text-gray-400 flex gap-2">
-                                    <span className="text-red-500">•</span> {c}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-6">
-                          <h3 className="text-sm font-bold text-blue-600 uppercase tracking-widest">Observability Requirements</h3>
-                          <span className="px-2 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded uppercase">White-Box Validation</span>
-                        </div>
-                        <div className="space-y-4">
-                          {result.adversarial?.observability?.map((item, i) => (
-                            <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                              <div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">UI Interaction</p>
-                                <p className="text-xs font-medium text-gray-700">{item.uiTest || 'Test Scenario'}</p>
-                              </div>
-                              <div className="border-l border-gray-200 pl-4">
-                                <p className="text-[10px] font-bold text-blue-400 uppercase mb-1">System State Verification</p>
-                                <p className="text-xs font-medium text-blue-900 flex items-center gap-2">
-                                  <Code className="h-3 w-3" />
-                                  {item.validation || 'No validation steps defined'}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </section>
+                  <AdversarialDesignSection adversarial={result.adversarial} />
 
                   {/* Phase 3: Formal Documentation */}
                   <section id="test-cases" className="space-y-6">
@@ -887,35 +371,35 @@ export default function App() {
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl border border-gray-200 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 overflow-hidden">
                           <div className="p-2 space-y-1 font-sans">
                             <button 
-                              onClick={downloadFullReport}
+                              onClick={() => ExportService.downloadFullReport(result)}
                               className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-xs font-medium text-gray-700 transition-colors"
                             >
                               <FileJson className="h-4 w-4 text-amber-500" />
                               Full Data (JSON)
                             </button>
                             <button 
-                              onClick={exportPDF}
+                              onClick={() => ExportService.exportPDF(result)}
                               className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-xs font-medium text-gray-700 transition-colors"
                             >
                               <FileType className="h-4 w-4 text-red-500" />
                               Strategy (PDF)
                             </button>
                             <button 
-                              onClick={exportDOCX}
+                              onClick={() => ExportService.exportDOCX(result)}
                               className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-xs font-medium text-gray-700 transition-colors"
                             >
                               <FileText className="h-4 w-4 text-blue-500" />
                               Formal Doc (DOCX)
                             </button>
                             <button 
-                              onClick={exportMarkdown}
+                              onClick={() => ExportService.exportMarkdown(result)}
                               className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-xs font-medium text-gray-700 transition-colors"
                             >
                               <FileCode className="h-4 w-4 text-indigo-500" />
                               Markdown (MD)
                             </button>
                             <button 
-                              onClick={exportPlaywright}
+                              onClick={() => ExportService.exportPlaywright(result)}
                               className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-xs font-medium text-gray-700 transition-colors"
                             >
                               <PlayCircle className="h-4 w-4 text-purple-500" />
@@ -923,7 +407,7 @@ export default function App() {
                             </button>
                             <div className="h-px bg-gray-100 my-1 mx-2" />
                             <button 
-                              onClick={exportCSV}
+                              onClick={() => ExportService.exportCSV(result)}
                               className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-xs font-medium text-gray-700 transition-colors"
                             >
                               <Send className="h-4 w-4 text-green-500" />
@@ -935,7 +419,7 @@ export default function App() {
                     </div>
 
                     <div className="space-y-8">
-                      {Object.entries(groupTestCases(result.testCases)).map(([featureName, scenarios]) => (
+                      {Object.entries(ExportService.groupTestCases(result.testCases)).map(([featureName, scenarios]) => (
                         <div key={featureName} className="space-y-4">
                           <div className="flex items-center gap-3">
                             <span className="h-px flex-1 bg-gray-200" />
@@ -1135,96 +619,13 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Settings Modal */}
-      <AnimatePresence>
-        {isSettingsOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsSettingsOpen(false)}
-              className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md bg-white rounded-[32px] border border-gray-200 shadow-2xl overflow-hidden"
-            >
-              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                    <Settings className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">Settings</h3>
-                    <p className="text-xs text-gray-500">Configure your workspace</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setIsSettingsOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="p-6 space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="api-key" className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                      <Key className="h-3 w-3" />
-                      Gemini API Key
-                    </label>
-                    <a 
-                      href="https://aistudio.google.com/app/apikey" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-[10px] font-bold text-blue-600 hover:underline uppercase tracking-wide"
-                    >
-                      Get Key
-                    </a>
-                  </div>
-                  <div className="relative">
-                    <input 
-                      id="api-key"
-                      type="password"
-                      placeholder="Paste your API key here..."
-                      className="w-full h-12 pl-4 pr-12 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
-                      value={geminiApiKey}
-                      onChange={(e) => setGeminiApiKey(e.target.value)}
-                    />
-                    <div className="absolute right-3 top-3 text-gray-300">
-                      <Key className="h-5 w-5" />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-gray-400 leading-relaxed">
-                    Your API key is stored locally in your browser and never shared with our servers.
-                    If left blank, the system will attempt to use the environment's default key.
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
-                <button 
-                  onClick={() => setIsSettingsOpen(false)}
-                  className="flex-1 h-11 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-100 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={() => saveApiKey(geminiApiKey)}
-                  className="flex-[2] h-11 rounded-xl bg-blue-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-700 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
-                >
-                  <Save className="h-4 w-4" />
-                  Save Changes
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+        apiKey={geminiApiKey}
+        setApiKey={setGeminiApiKey}
+        onSave={saveApiKey}
+      />
     </div>
   );
 }
