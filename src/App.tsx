@@ -24,18 +24,22 @@ import {
   LayoutDashboard,
   ArrowRight,
   BarChart3,
-  Shield
+  Shield,
+  Briefcase,
+  CheckCircle2
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { ResultHeader } from './components/ResultHeader';
 import { StrategicAnalysisSection } from './components/StrategicAnalysisSection';
 import { AdversarialDesignSection } from './components/AdversarialDesignSection';
+import { SourcesSection } from './components/SourcesSection';
 import { SettingsModal } from './components/SettingsModal';
 import { analyzeRequirements } from './services/qaService';
-import { QAResult, Attachment } from './types';
+import { QAResult, Attachment, JiraConfig } from './types';
 import Mermaid from './components/Mermaid';
 import { cn } from './lib/utils';
 import * as ExportService from './services/exportService';
+import { exportToJira } from './services/jiraService';
 
 export default function App() {
   const [requirements, setRequirements] = useState('');
@@ -45,18 +49,40 @@ export default function App() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [envOverride, setEnvOverride] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [jiraConfig, setJiraConfig] = useState<JiraConfig>({
+    domain: '',
+    email: '',
+    apiToken: '',
+    projectKey: ''
+  });
+  const [isExportingToJira, setIsExportingToJira] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const savedKey = localStorage.getItem('sentryqa_gemini_api_key');
-    if (savedKey) {
-      setGeminiApiKey(savedKey);
+    const savedEnv = localStorage.getItem('sentryqa_custom_env');
+    const savedJira = localStorage.getItem('sentryqa_jira_config');
+    
+    if (savedKey) setGeminiApiKey(savedKey);
+    if (savedEnv) setEnvOverride(savedEnv);
+    if (savedJira) {
+      try {
+        setJiraConfig(JSON.parse(savedJira));
+      } catch (e) {
+        console.error("Failed to parse saved Jira config");
+      }
     }
   }, []);
 
-  const saveApiKey = (key: string) => {
+  const saveSettings = (key: string, env: string, jira: JiraConfig) => {
     localStorage.setItem('sentryqa_gemini_api_key', key);
+    localStorage.setItem('sentryqa_custom_env', env);
+    localStorage.setItem('sentryqa_jira_config', JSON.stringify(jira));
     setGeminiApiKey(key);
+    setEnvOverride(env);
+    setJiraConfig(jira);
     setIsSettingsOpen(false);
   };
 
@@ -143,12 +169,34 @@ export default function App() {
     setIsAnalyzing(true);
     setError(null);
     try {
-      const data = await analyzeRequirements(requirements, attachments, geminiApiKey);
+      const data = await analyzeRequirements(requirements, attachments, geminiApiKey, envOverride);
       setResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during analysis');
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleJiraExport = async () => {
+    if (!result || !jiraConfig.domain || !jiraConfig.apiToken || !jiraConfig.projectKey) {
+      setError("Please configure Jira settings in the Gear menu first.");
+      setIsSettingsOpen(true);
+      return;
+    }
+
+    setIsExportingToJira(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await exportToJira(jiraConfig, result.testCases);
+      setSuccess(`Successfully exported ${result.testCases.length} test cases to Jira project ${jiraConfig.projectKey}!`);
+      // Clear success after 5 seconds
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export to Jira');
+    } finally {
+      setIsExportingToJira(false);
     }
   };
 
@@ -273,6 +321,17 @@ export default function App() {
               </div>
             </div>
 
+            {success && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 rounded-xl bg-green-50 border border-green-100 text-green-600 text-sm flex items-start gap-3"
+              >
+                <CheckCircle2 className="h-5 w-5 shrink-0" />
+                <p>{success}</p>
+              </motion.div>
+            )}
+
             {error && (
               <motion.div 
                 initial={{ opacity: 0, y: 10 }}
@@ -337,6 +396,9 @@ export default function App() {
 
                   {/* Phase 1: Strategic Analysis */}
                   <StrategicAnalysisSection analysis={result.analysis} />
+
+                  {/* Identified Sources */}
+                  <SourcesSection sources={result.sources} />
 
                   {/* Flowchart */}
                   {result.mermaidFlowchart && (
@@ -413,6 +475,19 @@ export default function App() {
                               <Send className="h-4 w-4 text-green-500" />
                               Test Cases (CSV)
                             </button>
+                            <div className="h-px bg-gray-100 my-1 mx-2" />
+                            <button 
+                              onClick={handleJiraExport}
+                              disabled={isExportingToJira}
+                              className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50 text-left text-xs font-medium text-gray-700 transition-colors disabled:opacity-50"
+                            >
+                              {isExportingToJira ? (
+                                <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                              ) : (
+                                <Briefcase className="h-4 w-4 text-blue-800" />
+                              )}
+                              Export to Jira
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -445,7 +520,6 @@ export default function App() {
                                   <thead>
                                     <tr className="bg-gray-50/50 border-b border-gray-200 uppercase font-bold text-[9px] text-gray-400 tracking-widest">
                                       <th className="px-6 py-3 w-32">ID</th>
-                                      <th className="px-6 py-3 w-28">Category</th>
                                       <th className="px-6 py-3">Scenario / steps</th>
                                       <th className="px-6 py-3">Expected Result</th>
                                       <th className="px-6 py-3 w-20">Ref</th>
@@ -460,16 +534,6 @@ export default function App() {
                                             tc.id.endsWith('-S') ? "text-red-500" : "text-blue-600"
                                           )}>
                                             {tc.id}
-                                          </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                          <span className={cn(
-                                            "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
-                                            tc.category.toLowerCase() === 'negative' ? "bg-red-50 text-red-600" :
-                                            tc.category.toLowerCase() === 'edge' ? "bg-amber-50 text-amber-600" :
-                                            "bg-blue-50 text-blue-600"
-                                          )}>
-                                            {tc.category}
                                           </span>
                                         </td>
                                         <td className="px-6 py-4 max-w-sm font-sans">
@@ -624,7 +688,11 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)} 
         apiKey={geminiApiKey}
         setApiKey={setGeminiApiKey}
-        onSave={saveApiKey}
+        envOverride={envOverride}
+        setEnvOverride={setEnvOverride}
+        jiraConfig={jiraConfig}
+        setJiraConfig={setJiraConfig}
+        onSave={saveSettings}
       />
     </div>
   );

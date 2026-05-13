@@ -2,7 +2,6 @@ export interface TestCase {
   id: string;
   feature: string;
   scenarioGroup: string;
-  category: string;
   scenario: string;
   preconditions: string;
   steps: string;
@@ -47,9 +46,25 @@ export interface AdversarialDesign {
   }[];
 }
 
+export interface Source {
+  name: string;
+  type: string;
+  description: string;
+  relevance: 'High' | 'Medium' | 'Low';
+  link?: string;
+}
+
 export interface QAResult {
   analysis: StrategicAnalysis;
   adversarial: AdversarialDesign;
   testCases: TestCase[];
   mermaidFlowchart?: string;
+  sources?: Source[];
+}
+
+export interface JiraConfig {
+  domain: string;
+  email: string;
+  apiToken: string;
+  projectKey: string;
 }

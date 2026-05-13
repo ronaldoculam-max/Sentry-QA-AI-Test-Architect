@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { QAResult, Attachment } from "../types";
+import { parseEnv } from "../lib/env";
 
 const SYSTEM_INSTRUCTION = `
 Role: Senior Strategic QA Architect & Agile Lead.
@@ -19,10 +20,20 @@ Phase 3: Formal Documentation
 Generate a structured and hierarchical set of test cases using the following model:
 Feature → Scenario → Test Case
 
+Phase 4: Sources & References
+- Identify all documents, images, and specific sections of the textual requirements provided that were used to build the analysis.
+- For each source, provide:
+  - name: Clear title or filename.
+  - type: 'Requirement Section', 'Attachment', or 'Document'.
+  - description: Specifically what information was extracted or analyzed from this source.
+  - relevance: 'High', 'Medium', or 'Low' based on its impact on the final test cases.
+  - link: If the source refers to an external URL mentioned in the text, provide it. If it refers to an attachment, provide the filename. If it's a specific section of the input text, you can omit this or provide a descriptive anchor name.
+
 Structure Definition:
 - Feature (F#): High-level functionality (e.g., Login, Checkout)
 - Scenario (S#): A specific flow or condition within the feature
 - Test Case (TC##): Individual validation under the scenario
+- TC##-S: Linked source indicator - if a test case is directly linked to a specific source, you can append -S.
 
 Test Case ID Format:
 - Use the format: F#.S#.TC##
@@ -33,13 +44,12 @@ For each Test Case, provide the following fields:
 - TC ID
 - Feature
 - Scenario Group (The specific scenario flow title)
-- Category (Functional, Negative, Edge, UI, Integration, etc.)
 - Scenario (The specific test scenario)
 - Pre-conditions
 - Steps (Numbered sequential steps)
 - Gherkin (A Given/When/Then representation of the test)
 - Expected Result
-- AC Reference
+- AC Reference (Always link back to the AC or Source name if applicable)
 
 Requirements:
 1. Group all test cases under their respective Feature and Scenario.
@@ -85,7 +95,6 @@ Return the result strictly in the following JSON format:
     "id": "string",
     "feature": "string",
     "scenarioGroup": "string",
-    "category": "string",
     "scenario": "string",
     "preconditions": "string",
     "steps": "string",
@@ -93,14 +102,29 @@ Return the result strictly in the following JSON format:
     "expectedResult": "string",
     "acReference": "string"
   }],
-  "mermaidFlowchart": "string"
+  "mermaidFlowchart": "string",
+  "sources": [{
+    "name": "string",
+    "type": "string",
+    "description": "string",
+    "relevance": "High | Medium | Low",
+    "link": "string"
+  }]
 }
 `;
 
-export async function analyzeRequirements(requirements: string, attachments: Attachment[] = [], customApiKey?: string): Promise<QAResult> {
+export async function analyzeRequirements(
+  requirements: string, 
+  attachments: Attachment[] = [], 
+  customApiKey?: string,
+  envOverride?: string
+): Promise<QAResult> {
   try {
+    const envVars = parseEnv(envOverride || '');
     const trimmedCustomKey = customApiKey?.trim();
-    const apiKey = trimmedCustomKey || process.env.GEMINI_API_KEY || '';
+    
+    // Priority: 1. Specific key field, 2. Manual .env override, 3. System env
+    const apiKey = trimmedCustomKey || envVars['GEMINI_API_KEY'] || process.env.GEMINI_API_KEY || '';
     
     if (!apiKey) {
       throw new Error("Gemini API Key is missing. Please provide one in Settings (gear icon).");
